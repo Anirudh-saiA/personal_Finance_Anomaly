@@ -79,7 +79,7 @@ export default function Dashboard({ analysisToView, setAnalysisToView }) {
     formData.append('file', file);
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/process_csv', { method: 'POST', body: formData });
+      const response = await fetch('https://personal-finance-anomaly.onrender.com/process_csv', { method: 'POST', body: formData });
       if (!response.ok) {
         const errData = await response.json();
         throw new Error(errData.error || 'Server error');

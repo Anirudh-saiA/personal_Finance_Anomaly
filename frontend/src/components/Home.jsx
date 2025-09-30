@@ -19,7 +19,7 @@ export default function Home() {
   useEffect(() => {
     const fetchNews = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:5000/news');
+        const response = await fetch('https://personal-finance-anomaly.onrender.com/news');
         if (!response.ok) {
           throw new Error('Failed to fetch news from the server.');
         }
