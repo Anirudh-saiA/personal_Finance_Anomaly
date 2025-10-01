@@ -7,7 +7,10 @@ import os
 
 # --- SETUP ---
 app = Flask(__name__)
-CORS(app) 
+
+# --- CORRECTED CORS CONFIGURATION FOR PRODUCTION ---
+# This now explicitly allows requests from your live Vercel frontend.
+CORS(app, resources={r"/*": {"origins": "https://personal-finance-anomaly.vercel.app"}})
 
 # --- NEWS API CONFIGURATION ---
 NEWS_API_KEY = os.environ.get('NEWS_API_KEY', 'ed65784dbb2f4c91a7c96c88f4256edc')
@@ -70,20 +73,14 @@ def process_csv():
 
             df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce').fillna(0)
             
-            # --- CORRECTED LOGIC ORDER ---
-            # 1. Create the 'month' column on the main dataframe first.
             df['month'] = pd.to_datetime(df['Date']).dt.month_name()
-
-            # 2. Now create the expenses dataframe, which will correctly inherit the 'month' column.
             expenses_df = df[df['Amount'] < 0].copy()
             expenses_df['Amount'] = expenses_df['Amount'].abs()
             
-            # 3. All calculations will now work correctly.
             category_averages = expenses_df.groupby('Category')['Amount'].mean().to_dict()
             category_spending = expenses_df.groupby('Category')['Amount'].sum().to_dict()
             monthly_spending = expenses_df.groupby('month')['Amount'].sum().to_dict()
 
-            # --- Summarize and format the response ---
             total_expenses = df[df['Amount'] < 0]['Amount'].abs().sum()
             total_income = df[df['Amount'] > 0]['Amount'].sum()
             balance = total_income - total_expenses
