@@ -11,11 +11,9 @@ CORS(app)
 
 # --- NEWS API CONFIGURATION ---
 NEWS_API_KEY = os.environ.get('NEWS_API_KEY', 'ed65784dbb2f4c91a7c96c88f4256edc')
-# --- CORRECTED URL: Using a more general query that is more likely to return results on a free plan ---
 NEWS_API_URL = f"https://newsapi.org/v2/everything?q=business&language=en&sortBy=publishedAt&apiKey={NEWS_API_KEY}"
 
-
-# ... (Model loading code remains the same) ...
+# --- MODEL AND COLUMNS LOADING ---
 try:
     with open('personal_finance_model.pkl', 'rb') as model_file:
         model = pickle.load(model_file)
@@ -27,32 +25,7 @@ except Exception as e:
     model = None
     model_columns = None
 
-
-# --- UPDATED NEWS ROUTE WITH BETTER LOGGING ---
-@app.route('/news', methods=['GET'])
-def get_news():
-    print("\n--- Received a request for /news ---") # New log
-    if NEWS_API_KEY == 'YOUR_NEWS_API_KEY_HERE':
-        print("ERROR: News API key is not configured.")
-        return jsonify({"error": "News API key not configured on the backend"}), 500
-    try:
-        response = requests.get(NEWS_API_URL)
-        
-        # --- NEW & IMPORTANT: Log the actual response from News API ---
-        print(f"News API response status code: {response.status_code}")
-        # We will now print the raw text of the response to see the error message
-        print(f"News API response body: {response.text}")
-        
-        response.raise_for_status() 
-        news_data = response.json()
-        print("Successfully fetched and sent news articles.")
-        return jsonify(news_data.get('articles', []))
-    except requests.exceptions.RequestException as e:
-        print(f"ERROR: Failed to fetch news from News API. Error: {e}")
-        return jsonify({"error": f"Failed to fetch news: {e}"}), 500
-
-
-# ... (The rest of your app.py file remains exactly the same) ...
+# --- HELPER FUNCTION FOR FEATURE ENGINEERING ---
 def engineer_features(df):
     df_processed = df.copy()
     df_processed['Date'] = pd.to_datetime(df_processed['Date'])
@@ -63,9 +36,19 @@ def engineer_features(df):
     df_final = df_processed.reindex(columns=model_columns, fill_value=0)
     return df_final
 
+# --- API ROUTES ---
 @app.route('/')
 def index():
     return "Backend is running."
+
+@app.route('/news', methods=['GET'])
+def get_news():
+    try:
+        response = requests.get(NEWS_API_URL)
+        response.raise_for_status()
+        return jsonify(response.json().get('articles', []))
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": f"Failed to fetch news: {e}"}), 500
 
 @app.route('/process_csv', methods=['POST'])
 def process_csv():
@@ -87,14 +70,20 @@ def process_csv():
 
             df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce').fillna(0)
             
+            # --- CORRECTED LOGIC ORDER ---
+            # 1. Create the 'month' column on the main dataframe first.
+            df['month'] = pd.to_datetime(df['Date']).dt.month_name()
+
+            # 2. Now create the expenses dataframe, which will correctly inherit the 'month' column.
             expenses_df = df[df['Amount'] < 0].copy()
             expenses_df['Amount'] = expenses_df['Amount'].abs()
             
+            # 3. All calculations will now work correctly.
             category_averages = expenses_df.groupby('Category')['Amount'].mean().to_dict()
             category_spending = expenses_df.groupby('Category')['Amount'].sum().to_dict()
-            df['month'] = pd.to_datetime(df['Date']).dt.month_name()
             monthly_spending = expenses_df.groupby('month')['Amount'].sum().to_dict()
 
+            # --- Summarize and format the response ---
             total_expenses = df[df['Amount'] < 0]['Amount'].abs().sum()
             total_income = df[df['Amount'] > 0]['Amount'].sum()
             balance = total_income - total_expenses
@@ -117,4 +106,3 @@ def process_csv():
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
-
